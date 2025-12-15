@@ -3,193 +3,100 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JS Tetris Basic - Single File</title>
+    <title>Complete JS Tetris</title>
     
     <style>
         body {
             display: flex;
             flex-direction: column;
             align-items: center;
-            font-family: sans-serif;
-            background-color: #f4f4f4;
-            color: #333;
+            font-family: 'Arial', sans-serif;
+            background-color: #1a1a1a;
+            color: #eee;
+        }
+
+        h1 {
+            color: #0f0;
+            text-shadow: 0 0 5px #0f0;
+        }
+
+        .game-container {
+            display: flex;
+            gap: 20px;
         }
 
         /* 10x20 게임 보드 스타일 */
         #game-board {
-            /* 10 cells * 20px = 200px */
-            width: 200px;
-            /* 20 cells * 20px = 400px */
-            height: 400px;
-            
+            width: 250px; /* 10 cells * 25px */
+            height: 500px; /* 20 cells * 25px */
             display: grid;
-            /* 10개의 동일한 크기의 열 */
             grid-template-columns: repeat(10, 1fr); 
-            /* 20개의 동일한 크기의 행 */
             grid-template-rows: repeat(20, 1fr);
-            
-            border: 5px solid #333;
+            border: 5px solid #555;
             background-color: #000;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
         }
 
         /* 모든 셀의 기본 스타일 */
         .cell {
-            width: 100%;
-            height: 100%;
             box-sizing: border-box;
-            border: 1px solid #111; /* 보드의 그리드 라인 */
+            border: 1px solid #111;
         }
 
-        /* 현재 움직이는 블록에 적용되는 스타일 */
-        .block {
-            background-color: cyan; /* 블록 색상 */
-            border: 1px solid white;
-            /* 테트리스 느낌을 위해 셀 내부의 경계를 약간 밝게 설정 */
-            box-shadow: inset 0 0 5px rgba(255, 255, 255, 0.5);
+        .info-panel {
+            width: 120px;
+            padding: 10px;
+            background-color: #222;
+            border: 3px solid #555;
+            border-radius: 5px;
+            color: #ddd;
+        }
+        
+        /* 블록 색상 정의 */
+        .I { background-color: #00FFFF; border-color: #fff; } /* Cyan */
+        .J { background-color: #0000FF; border-color: #fff; } /* Blue */
+        .L { background-color: #FFA500; border-color: #fff; } /* Orange */
+        .O { background-color: #FFFF00; border-color: #fff; } /* Yellow */
+        .S { background-color: #00FF00; border-color: #fff; } /* Lime */
+        .T { background-color: #800080; border-color: #fff; } /* Purple */
+        .Z { background-color: #FF0000; border-color: #fff; } /* Red */
+        
+        .frozen {
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
         }
     </style>
 </head>
 <body>
-    <h1>테트리스 기본 구현</h1>
-    <div id="game-board">
+    <h1>TETRIS JS</h1>
+    <div class="game-container">
+        <div id="game-board"></div>
+        <div class="info-panel">
+            <h2>점수</h2>
+            <div id="score">0</div>
+            <p>
+                <strong>조작키:</strong><br>
+                ← → : 이동<br>
+                ↑ : 회전<br>
+                ↓ : 소프트 드롭
+            </p>
         </div>
-    <p>화살표 키 (←, →, ↓) 로 블록을 이동해보세요.</p>
+    </div>
     
     <script>
         const COLS = 10;
         const ROWS = 20;
-        const board = document.getElementById('game-board');
-        let grid = []; // 1차원 배열로 셀(div)들을 저장
-        let currentPosition = 4; // 현재 블록의 최상단 왼쪽 셀 인덱스 (가운데 시작)
+        const boardElement = document.getElementById('game-board');
+        const scoreElement = document.getElementById('score');
+        
+        let grid = []; 
+        let gameBoard = Array(ROWS).fill(0).map(() => Array(COLS).fill(null)); // 보드 상태 (쌓인 블록)
+        let score = 0;
         let gameLoopInterval;
 
-        // 단순화된 I자 모양 블록 정의 (1x4)
-        const blockShape = [
-            [1], // 1은 블록이 채워진 셀을 의미
-            [1], 
-            [1], 
-            [1]
-        ];
-
-        // 1. 그리드 셀 생성 및 초기화
-        function createGrid() {
-            for (let i = 0; i < COLS * ROWS; i++) {
-                const cell = document.createElement('div');
-                cell.classList.add('cell');
-                board.appendChild(cell);
-                grid.push(cell);
-            }
-        }
-
-        // 2. 현재 블록 위치에 색을 칠하여 화면에 그리기
-        function draw() {
-            // 이전 블록 스타일 제거
-            grid.forEach(cell => cell.classList.remove('block'));
-
-            // 현재 블록 그리기
-            for (let r = 0; r < blockShape.length; r++) {
-                if (blockShape[r][0] === 1) {
-                    // currentPosition에서 아래로 r칸 떨어진 셀
-                    const blockIndex = currentPosition + (r * COLS);
-                    
-                    // 보드 안에 있는 셀에만 스타일 적용 (경계를 벗어나지 않도록)
-                    if (grid[blockIndex]) {
-                         grid[blockIndex].classList.add('block');
-                    }
-                }
-            }
-        }
-
-        // 3. 블록 충돌 확인 (바닥과 좌우 벽만 확인)
-        function checkCollision(newPosition, direction) {
-            // 4번째 칸이 바닥(마지막 행)을 벗어나는지 확인
-            const bottomCellIndex = newPosition + ((blockShape.length - 1) * COLS);
-            if (bottomCellIndex >= COLS * ROWS) {
-                return true; // 바닥 충돌
-            }
-            
-            // 좌우 벽 충돌 검사
-            if (direction === 'left') {
-                // 블록의 최상단 셀이 왼쪽으로 이동했을 때 해당 위치가 보드 인덱스상 왼쪽 벽을 넘어서는 경우
-                if ((currentPosition % COLS) === 0) {
-                    return true;
-                }
-            } else if (direction === 'right') {
-                // 블록의 최상단 셀이 오른쪽으로 이동했을 때 해당 위치가 보드 인덱스상 오른쪽 벽에 닿는 경우
-                if ((currentPosition % COLS) === COLS - 1) {
-                    return true;
-                }
-            }
-            
-            return false;
-        }
-
-        // 4. 블록 이동 로직
-        function move(direction) {
-            let newPosition = currentPosition;
-            let moved = false;
-
-            if (direction === 'left') {
-                if (!checkCollision(currentPosition, 'left')) {
-                    newPosition -= 1;
-                    moved = true;
-                }
-            } else if (direction === 'right') {
-                if (!checkCollision(currentPosition, 'right')) {
-                    newPosition += 1;
-                    moved = true;
-                }
-            } else if (direction === 'down') {
-                newPosition += COLS;
-                moved = true;
-            }
-
-            if (moved && !checkCollision(newPosition, 'down')) {
-                currentPosition = newPosition;
-                draw();
-                return true; // 이동 성공
-            } 
-            
-            // 아래로 이동 중 충돌 발생 시 (바닥에 닿음)
-            if (direction === 'down' && moved) {
-                clearInterval(gameLoopInterval);
-                alert('블록 고정! (여기서 다음 블록 생성, 줄 제거 로직 등이 추가되어야 합니다.)');
-                return false;
-            }
-            return false; // 이동 실패
-        }
-
-        // 5. 키보드 이벤트 핸들러
-        document.addEventListener('keydown', (e) => {
-            // 기본 동작(페이지 스크롤 등) 방지
-            if (['ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
-                e.preventDefault();
-            }
-            
-            if (e.key === 'ArrowLeft') {
-                move('left');
-            } else if (e.key === 'ArrowRight') {
-                move('right');
-            } else if (e.key === 'ArrowDown') {
-                move('down');
-            }
-        });
-
-        // 6. 게임 루프: 블록 자동 하강
-        function gameLoop() {
-            move('down');
-        }
-
-        // 게임 시작 함수
-        function initGame() {
-            createGrid(); // HTML에 그리드 셀 생성
-            draw(); // 첫 번째 블록 그리기
-            gameLoopInterval = setInterval(gameLoop, 1000); // 1초마다 블록이 한 칸씩 내려옴
-        }
-
-        // 페이지 로드 완료 후 게임 시작
-        window.onload = initGame;
-    </script>
-</body>
-</html>
+        // 7가지 테트로미노 모양 정의 (행렬 형태)
+        const TETROMINOS = [
+            { shape: [[1,1,1,1]], color: 'I' }, // I
+            { shape: [[1,0,0],[1,1,1]], color: 'J' }, // J
+            { shape: [[0,0,1],[1,1,1]], color: 'L' }, // L
+            { shape: [[1,1],[1,1]], color: 'O' }, // O
+            { shape: [[0,1,1],[1,1,0]], color: '
